@@ -10,11 +10,12 @@
 
     <style>
         body{
-            background:#f4f6f9;
+            background:#0b408f;
+            
         }
 
         .navbar{
-            box-shadow:0 2px 5px rgba(0,0,0,.15);
+            box-shadow:0 2px 5px rgb(0, 0, 0);
         }
 
         .kanban-card{
@@ -27,7 +28,7 @@
         }
 
         .tarefa{
-            border-left:5px solid #0d6efd;
+            border-left:5px solid #ff0000;
             margin-bottom:12px;
             transition:.2s;
         }
@@ -42,7 +43,7 @@
         }
 
         .descricao{
-            color:#555;
+            color:#242323;
             margin-top:8px;
         }
 
@@ -54,6 +55,8 @@
             resize:none;
         }
 
+        .tarefa.progresso { border-left-color: #ff1808; }
+        .tarefa.concluido { border-left-color: #ff0000; }
     </style>
 
 </head>
@@ -88,6 +91,9 @@
 
 <form id="formTarefa">
 
+<!-- Campo simples para saber se estamos editando -->
+<input type="hidden" id="editarStatus">
+
 <div class="mb-3">
 
 <label class="form-label">
@@ -120,11 +126,21 @@ placeholder="Digite uma descrição"></textarea>
 
 </div>
 
+<!-- Adicionei o campo de status, simples -->
+<div class="mb-3">
+    <label class="form-label">Status</label>
+    <select class="form-select" id="statusTarefa">
+        <option value="afazer">A Fazer</option>
+        <option value="progresso">Em Progresso</option>
+        <option value="concluido">Concluído</option>
+    </select>
+</div>
+
 <div class="text-end">
 
 <button
 type="submit"
-class="btn btn-success">
+class="btn btn-success" id="botaoSalvar">
 
 Adicionar
 
@@ -175,7 +191,7 @@ Cancelar
 
             <div class="card-body" id="colEmProgresso">
 
-                <p class="text-muted text-center">
+                <p class="text-muted text-center" id="msgProgresso">
                     Nenhuma tarefa cadastrada.
                 </p>
             </div>
@@ -193,7 +209,7 @@ Cancelar
 
             <div class="card-body" id="colConcluido">
 
-                <p class="text-muted text-center">
+                <p class="text-muted text-center" id="msgConcluido">
                     Nenhuma tarefa cadastrada.
                 </p>
             </div>
@@ -209,12 +225,25 @@ Cancelar
 
     var form = document.getElementById("formTarefa");
     var colAfazer = document.getElementById("colAfazer");
-    var mensagem = document.getElementById("msgAfazer");
+    var colProgresso = document.getElementById("colEmProgresso");
+    var colConcluido = document.getElementById("colConcluido");
+    var msgAfazer = document.getElementById("msgAfazer");
+    var msgProgresso = document.getElementById("msgProgresso");
+    var msgConcluido = document.getElementById("msgConcluido");
+    var campoEditar = document.getElementById("editarStatus");
+    var botaoSalvar = document.getElementById("botaoSalvar");
 
     var collapseEl = document.getElementById("collapsibleForm");
     var collapse = new bootstrap.Collapse(collapseEl, {
         toggle: false
     });
+
+    // Função simples para verificar se coluna está vazia
+    function verificarVazio(coluna, mensagem) {
+        if (coluna.children.length == 0) {
+            coluna.appendChild(mensagem);
+        }
+    }
 
     form.addEventListener("submit", function (e) {
 
@@ -222,15 +251,29 @@ Cancelar
 
         var titulo = document.getElementById("tituloTarefa").value.trim();
         var descricao = document.getElementById("descricaoTarefa").value.trim();
+        var status = document.getElementById("statusTarefa").value;
+        var statusAntigo = campoEditar.value;
 
         if (titulo == "") {
             return;
         }
 
-        if (mensagem) {
-            mensagem.remove();
-            mensagem = null;
+        // Se for edição, remove a tarefa antiga
+        if (statusAntigo != "") {
+            var colunaAntiga;
+            if (statusAntigo == "afazer") colunaAntiga = colAfazer;
+            if (statusAntigo == "progresso") colunaAntiga = colProgresso;
+            if (statusAntigo == "concluido") colunaAntiga = colConcluido;
+
+            var tarefaAntiga = colunaAntiga.querySelector(".tarefa");
+            if (tarefaAntiga) tarefaAntiga.remove();
+            verificarVazio(colunaAntiga, statusAntigo == "afazer" ? msgAfazer : statusAntigo == "progresso" ? msgProgresso : msgConcluido);
         }
+
+        // Remove mensagem de vazio da coluna nova
+        if (status == "afazer" && msgAfazer.parentElement == colAfazer) msgAfazer.remove();
+        if (status == "progresso" && msgProgresso.parentElement == colProgresso) msgProgresso.remove();
+        if (status == "concluido" && msgConcluido.parentElement == colConcluido) msgConcluido.remove();
 
         var data = new Date();
 
@@ -240,7 +283,19 @@ Cancelar
 
         var card = document.createElement("div");
 
-        card.className = "card tarefa shadow-sm";
+        card.className = "card tarefa shadow-sm " + status;
+
+        // Texto e cor do status
+        var textoStatus = "A Fazer";
+        var corBadge = "bg-primary";
+        if (status == "progresso") {
+            textoStatus = "Em Progresso";
+            corBadge = "bg-warning text-dark";
+        }
+        if (status == "concluido") {
+            textoStatus = "Concluído";
+            corBadge = "bg-success";
+        }
 
         card.innerHTML = `
 
@@ -260,13 +315,13 @@ Cancelar
 
                 <br>
 
-                <small class="badge bg-primary mt-2">
-                    A Fazer
+                <small class="badge ${corBadge} mt-2">
+                    ${textoStatus}
                 </small>
 
                 <div class="botoes">
 
-                    <button class="btn btn-outline-primary btn-sm">
+                    <button class="btn btn-outline-primary btn-sm editar">
                         Editar
                     </button>
 
@@ -278,29 +333,38 @@ Cancelar
 
         `;
 
+        // Botão excluir (igual ao original)
         card.querySelector(".excluir").addEventListener("click", function () {
-
             card.remove();
-
-            if (colAfazer.children.length == 0) {
-
-                colAfazer.innerHTML = `
-                    <p class="text-muted text-center" id="msgAfazer">
-                        Nenhuma tarefa cadastrada.
-                    </p>
-                `;
-
-                mensagem = document.getElementById("msgAfazer");
-            }
+            verificarVazio(colAfazer, msgAfazer);
+            verificarVazio(colProgresso, msgProgresso);
+            verificarVazio(colConcluido, msgConcluido);
         });
-        colAfazer.appendChild(card);
+
+        // Botão editar - FUNCIONANDO, simples
+        card.querySelector(".editar").addEventListener("click", function () {
+            document.getElementById("tituloTarefa").value = titulo;
+            document.getElementById("descricaoTarefa").value = descricao;
+            document.getElementById("statusTarefa").value = status;
+            campoEditar.value = status;
+            botaoSalvar.textContent = "Atualizar";
+            collapse.show();
+        });
+
+        // Adiciona na coluna correta
+        if (status == "afazer") colAfazer.appendChild(card);
+        if (status == "progresso") colProgresso.appendChild(card);
+        if (status == "concluido") colConcluido.appendChild(card);
+
+        // Reseta formulário
         form.reset();
+        campoEditar.value = "";
+        botaoSalvar.textContent = "Adicionar";
         collapse.hide();
 
     });
 
 })();
-
 </script>
 </body>
 </html>
